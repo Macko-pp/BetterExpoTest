@@ -1,0 +1,14 @@
+# Tells Grafana where the numbers are: in Prometheus.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    # A fixed id, so the dashboard file can refer to this data source
+    uid: prometheus
+    # Inside the Docker network, containers find each other by service name
+    # (the name "prometheus" comes from docker-compose.yml)
+    url: http://prometheus:9090
+    # "proxy" = the Grafana server asks Prometheus (not your browser)
+    access: proxy
+    isDefault: true

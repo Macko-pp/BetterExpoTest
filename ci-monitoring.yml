@@ -1,0 +1,83 @@
+# A third workflow, only for monitoring (Level 5).
+# ci.yml tests the Docker image and Kubernetes. ci-website.yml tests the website.
+# This one tests Prometheus and Grafana.
+# It shows up as its own pipeline named "CI Monitoring" in the Actions tab.
+name: CI Monitoring
+
+# When the pipeline runs
+on:
+  # Run on every push to main or to the broken branch
+  push:
+    branches: [main, broken]
+  # Also run on every pull request
+  pull_request:
+
+jobs:
+  # Job 1: check the Prometheus files for mistakes
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check prometheus.yml and alerts.yml
+        # promtool is a tool that comes inside the Prometheus image.
+        # "check config" reads prometheus.yml AND the alert rules it points to,
+        # and fails if something is wrong (a typo, a wrong indent, a bad rule).
+        # The -v lines copy our files to the paths that prometheus.yml expects.
+        run: |
+          docker run --rm --entrypoint promtool \
+            -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+            -v "$PWD/alerts.yml:/etc/prometheus/alerts.yml:ro" \
+            prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+
+  # Job 2: start everything and check that the numbers flow
+  monitoring-test:
+    # Wait for lint to pass first. If lint fails, this job is skipped
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        # server.py runs "docker run expo:1.0", so the image must exist on this VM
+        run: docker build -t expo:1.0 .
+
+      - name: Start the website and the monitoring tools
+        run: |
+          # Start the website in the background (the & does that).
+          # HOST=0.0.0.0 lets the Prometheus container reach it.
+          HOST=0.0.0.0 python3 server.py &
+          # Wait up to 10 seconds until the website answers
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -s http://localhost:8000 > /dev/null && break
+            sleep 1
+          done
+          # Start Prometheus and Grafana (-d = in the background)
+          docker compose up -d
+          # Wait up to 60 seconds until Grafana answers (it starts last and slowest)
+          for i in $(seq 1 60); do
+            curl -s http://localhost:3000/api/health > /dev/null && break
+            sleep 1
+          done
+
+      - name: Run the monitoring tests
+        run: |
+          # Make "| tee" keep the exit code of test-monitoring.sh
+          set -o pipefail
+          # Run the tests and save the output
+          sh test-monitoring.sh | tee test-monitoring-results.txt
+
+      - name: Show the container logs if something went wrong
+        # failure() = run this step only when an earlier step failed
+        if: failure()
+        run: docker compose logs
+
+      - name: Upload test results
+        # always() uploads the file even when the tests failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # The artifact name you see in the Actions tab
+          name: monitoring-test-results
+          path: test-monitoring-results.txt

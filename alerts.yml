@@ -1,0 +1,32 @@
+# Alert rules: Prometheus checks these conditions all the time.
+# When a condition is true for long enough, the alert is "firing".
+# See them at http://localhost:9090/alerts
+# (A real system would also send an email or a message.
+#  For learning, we only look at them on the page.)
+
+groups:
+  - name: expo-alerts
+    rules:
+      # Alert 1: the website is not answering at all
+      - alert: ExpoWebsiteDown
+        # "up" is a number Prometheus creates by itself for every target:
+        # 1 = the last scrape worked, 0 = it failed
+        expr: up{job="expo-website"} == 0
+        # The condition must stay true for 15 seconds before the alert fires
+        # (this avoids alerts for one single missed scrape)
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "The expo website is down"
+
+      # Alert 2: too many calculations fail
+      - alert: ExpoManyErrors
+        # rate(...[1m]) = how many per second, averaged over the last minute.
+        # More than 0.2 errors per second = about 1 error every 5 seconds.
+        expr: rate(expo_calculations_total{result="error"}[1m]) > 0.2
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Many calculations are failing"

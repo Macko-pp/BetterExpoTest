@@ -1,0 +1,32 @@
+# Prometheus configuration: WHAT to watch and HOW OFTEN.
+# Prometheus "scrapes" (visits) a web address, reads the numbers there,
+# and stores them with a timestamp.
+
+global:
+  # Visit every target every 5 seconds (the default is 1 minute,
+  # we use a short time so you see results fast while learning)
+  scrape_interval: 5s
+  # Check the alert rules every 5 seconds too
+  evaluation_interval: 5s
+
+# Files with alert rules (see alerts.yml)
+rule_files:
+  # This path is INSIDE the Prometheus container (see docker-compose.yml)
+  - /etc/prometheus/alerts.yml
+
+# Look at itself
+scrape_configs:
+  # A "job" is a group of targets that do the same thing
+  - job_name: expo-website
+    # Where to read the numbers. The default path is /metrics.
+    # host.docker.internal = "the computer that runs Docker".
+    # Prometheus lives in a container, server.py lives on your computer,
+    # so this is how the container finds the server.
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+
+  # Prometheus can watch itself too. Good for checking that it works.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -1,0 +1,48 @@
+# Starts the monitoring tools with ONE command:  docker compose up -d
+# Stops them with:                                docker compose down
+# (docker compose runs several containers together, described in one file)
+#
+# It does NOT start the website. Start that yourself:
+#   HOST=0.0.0.0 python3 server.py
+
+services:
+  # Prometheus: collects and stores the numbers
+  prometheus:
+    # A fixed version, so everyone gets the same thing
+    image: prom/prometheus:v3.5.0
+    # Show it at http://localhost:9090
+    # (left side = your computer, right side = inside the container)
+    ports:
+      - "9090:9090"
+    # Copy our files into the container (:ro = read only)
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+    # On Linux, "host.docker.internal" does not exist by itself.
+    # This line creates it. (Docker Desktop on Mac/Windows already has it.)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Grafana: draws the numbers as graphs
+  grafana:
+    image: grafana/grafana:12.1.0
+    # Show it at http://localhost:3000
+    ports:
+      - "3000:3000"
+    # Start only after Prometheus
+    depends_on:
+      - prometheus
+    environment:
+      # FOR LEARNING ONLY: no login needed, everybody is an admin.
+      # Never do this on a real server.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      # "Provisioning" = Grafana sets itself up from files when it starts,
+      # so you do not have to click through menus.
+      #   datasources: connects Grafana to Prometheus
+      #   dashboards:  tells Grafana where to find dashboard files
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # The dashboard file itself
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

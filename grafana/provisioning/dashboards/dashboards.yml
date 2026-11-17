@@ -1,0 +1,9 @@
+# Tells Grafana to load every dashboard file it finds in a folder.
+apiVersion: 1
+
+providers:
+  - name: expo
+    type: file
+    options:
+      # This path is INSIDE the Grafana container (see docker-compose.yml)
+      path: /var/lib/grafana/dashboards
